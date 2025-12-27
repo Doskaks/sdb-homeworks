@@ -1,0 +1,16 @@
+filebeat.inputs:
+- type: log
+  enabled: true
+  paths:
+    - /var/lib/docker/containers/*/*.log
+
+- type: log
+  enabled: true
+  paths:
+    - /usr/share/filebeat/nginx-logs/access.log
+
+setup.kibana:
+  host: "http://kibana:5601"
+
+output.elasticsearch:
+  hosts: ["elasticsearch:9200"]

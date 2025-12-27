@@ -1,69 +1,26 @@
 version: '3.7'
-
 services:
   elasticsearch:
     image: elasticsearch:7.17.9
     environment:
       - discovery.type=single-node
-      - xpack.security.enabled=false
-      - cluster.name=nginx-cluster
-    ports:
-      - "9200:9200"
+    ports: ["9200:9200"]
 
   kibana:
     image: kibana:7.17.9
     environment:
       - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
-    ports:
-      - "5601:5601"
-    depends_on:
-      - elasticsearch
+    ports: ["5601:5601"]
 
   nginx:
     image: nginx:alpine
-    ports:
-      - "8080:80"
-    volumes:
-      - ./nginx-logs:/var/log/nginx
-    # Создаем простейший access.log
-    command: >
-      sh -c "
-      mkdir -p /var/log/nginx &&
-      while true; do
-        echo '192.168.1.100 - - [$(date -u +'%d/%b/%Y:%H:%M:%S +0000')] \"GET /index.html HTTP/1.1\" 200 612' >> /var/log/nginx/access.log;
-        echo '192.168.1.101 - - [$(date -u +'%d/%b/%Y:%H:%M:%S +0000')] \"GET /test HTTP/1.1\" 404 157' >> /var/log/nginx/access.log;
-        sleep 5;
-      done
-      "
+    ports: ["8080:80"]
 
-  logstash:
-    image: logstash:7.17.9
-    volumes:
-      - ./nginx-logs:/var/log/nginx
+  filebeat:
+    image: docker.elastic.co/beats/filebeat:7.17.9
     command: >
       sh -c "
-      sleep 10 &&
-      logstash -e '
-      input {
-        file {
-          path => \"/var/log/nginx/access.log\"
-          start_position => \"beginning\"
-          sincedb_path => \"/dev/null\"
-        }
-      }
-      filter {
-        grok {
-          match => { \"message\" => \"%{COMBINEDAPACHELOG}\" }
-        }
-      }
-      output {
-        elasticsearch {
-          hosts => [\"elasticsearch:9200\"]
-          index => \"nginx-access-logs\"
-        }
-        stdout { codec => rubydebug }
-      }'
+      echo '192.168.1.100 - - [27/Dec/2024:10:00:00 +0000] \"GET / HTTP/1.1\" 200 1024' > /tmp/nginx.log &&
+      echo '192.168.1.101 - - [27/Dec/2024:10:00:01 +0000] \"GET /test HTTP/1.1\" 404 157' >> /tmp/nginx.log &&
+      filebeat -e -E output.elasticsearch.hosts=['elasticsearch:9200'] -E 'filebeat.inputs=[{type: log, paths: [/tmp/nginx.log]}]'
       "
-    depends_on:
-      - elasticsearch
-    restart: unless-stopped

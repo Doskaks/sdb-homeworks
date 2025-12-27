@@ -3,36 +3,67 @@ version: '3.7'
 services:
   elasticsearch:
     image: elasticsearch:7.17.9
-    container_name: elasticsearch
     environment:
-      - xpack.security.enabled=false
       - discovery.type=single-node
-      - cluster.name=my-random-cluster-nikolay
-    ulimits:
-      memlock:
-        soft: -1
-        hard: -1
-      nofile:
-        soft: 65536
-        hard: 65536
-    cap_add:
-      - IPC_LOCK
-    volumes:
-      - elasticsearch-data:/usr/share/elasticsearch/data
+      - xpack.security.enabled=false
+      - cluster.name=nginx-cluster
     ports:
-      - 9200:9200
-      - 9300:9300
+      - "9200:9200"
 
   kibana:
-    container_name: kibana
     image: kibana:7.17.9
     environment:
       - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
     ports:
-      - 5601:5601
+      - "5601:5601"
     depends_on:
       - elasticsearch
 
-volumes:
-  elasticsearch-data:
-    driver: local
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "8080:80"
+    volumes:
+      - ./nginx-logs:/var/log/nginx
+    # Создаем простейший access.log
+    command: >
+      sh -c "
+      mkdir -p /var/log/nginx &&
+      while true; do
+        echo '192.168.1.100 - - [$(date -u +'%d/%b/%Y:%H:%M:%S +0000')] \"GET /index.html HTTP/1.1\" 200 612' >> /var/log/nginx/access.log;
+        echo '192.168.1.101 - - [$(date -u +'%d/%b/%Y:%H:%M:%S +0000')] \"GET /test HTTP/1.1\" 404 157' >> /var/log/nginx/access.log;
+        sleep 5;
+      done
+      "
+
+  logstash:
+    image: logstash:7.17.9
+    volumes:
+      - ./nginx-logs:/var/log/nginx
+    command: >
+      sh -c "
+      sleep 10 &&
+      logstash -e '
+      input {
+        file {
+          path => \"/var/log/nginx/access.log\"
+          start_position => \"beginning\"
+          sincedb_path => \"/dev/null\"
+        }
+      }
+      filter {
+        grok {
+          match => { \"message\" => \"%{COMBINEDAPACHELOG}\" }
+        }
+      }
+      output {
+        elasticsearch {
+          hosts => [\"elasticsearch:9200\"]
+          index => \"nginx-access-logs\"
+        }
+        stdout { codec => rubydebug }
+      }'
+      "
+    depends_on:
+      - elasticsearch
+    restart: unless-stopped

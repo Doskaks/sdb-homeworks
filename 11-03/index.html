@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Nginx</title>
+</head>
+<body>
+    <h1>Nginx + Logstash + Elasticsearch + Kibana</h1>
+    <p>Эта страница генерирует логи для ELK стека</p>
+    <button onclick="loadPage()">Сгенерировать запрос</button>
+    <div id="result"></div>
+    
+    <script>
+        function loadPage() {
+            fetch('/status')
+                .then(response => response.text())
+                .then(data => {
+                    document.getElementById('result').innerHTML = 
+                        'Запрос выполнен: ' + new Date().toLocaleTimeString();
+                });
+        }
+        // Автоматически генерируем запросы каждые 5 секунд
+        setInterval(loadPage, 5000);
+    </script>
+</body>
+</html>

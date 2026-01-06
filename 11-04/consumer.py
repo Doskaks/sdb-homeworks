@@ -1,15 +1,20 @@
 #!/usr/bin/env python
 # coding=utf-8
 import pika
+import time
 
-connection = pika.BlockingConnection(pika.ConnectionParameters('localhost'))
+credentials = pika.PlainCredentials('admin', 'admin123')
+parameters = pika.ConnectionParameters('192.168.88.10', 5672, '/', credentials)
+
+connection = pika.BlockingConnection(parameters)
 channel = connection.channel()
 channel.queue_declare(queue='hello')
 
+for i in range(5):
+    message = f'Сообщение #{i+1} от producer'
+    channel.basic_publish(exchange='', routing_key='hello', body=message)
+    print(f" [x] Отправлено: {message}")
+    time.sleep(1)
 
-def callback(ch, method, properties, body):
-    print(" [x] Received %r" % body)
-
-
-channel.basic_consume(callback, queue='hello', no_ack=True)
-channel.start_consuming()
+connection.close()
+print("✅ Все сообщения отправлены!")

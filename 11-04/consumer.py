@@ -1,20 +1,33 @@
 #!/usr/bin/env python
 # coding=utf-8
 import pika
-import time
 
-credentials = pika.PlainCredentials('admin', 'admin123')
-parameters = pika.ConnectionParameters('192.168.88.10', 5672, '/', credentials)
+# Добавляем такую же аутентификацию
+credentials = pika.PlainCredentials('admin', 'admin')
+
+parameters = pika.ConnectionParameters(
+    host='192.168.88.11',
+    port=5672,
+    virtual_host='/',
+    credentials=credentials
+)
 
 connection = pika.BlockingConnection(parameters)
 channel = connection.channel()
-channel.queue_declare(queue='hello')
 
-for i in range(5):
-    message = f'Сообщение #{i+1} от producer'
-    channel.basic_publish(exchange='', routing_key='hello', body=message)
-    print(f" [x] Отправлено: {message}")
-    time.sleep(1)
+# Объявляем ту же очередь
+channel.queue_declare(queue='hello (rmq02)')
 
-connection.close()
-print("✅ Все сообщения отправлены!")
+print(' [*] Ожидание сообщений. Для выхода нажмите CTRL+C')
+
+def callback(ch, method, properties, body):
+    print(f" [x] Получено: {body.decode()}")
+
+# Исправляем вызов basic_consume (правильный порядок аргументов)
+channel.basic_consume(
+    queue='hello',
+    on_message_callback=callback,
+    auto_ack=True  # вместо no_ack=True в новой версии pika
+)
+
+channel.start_consuming()
